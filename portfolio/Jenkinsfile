@@ -3,8 +3,11 @@ pipeline {
     agent any
 
     environment {
+
         DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
-        IMAGE_NAME = "DOCKER_USERNAME/portfolio"
+
+        IMAGE_NAME = "${DOCKER_USERNAME}/portfolio"
+
         IMAGE_TAG = "v1"
 
         SONAR_HOST_URL = credentials('sonar-host-url')
@@ -12,31 +15,58 @@ pipeline {
 
     stages {
 
+        /*
+        =====================================
+        Checkout Source Code
+        =====================================
+        */
+
         stage('Checkout SCM') {
+
             when {
                 branch 'main'
             }
+
             steps {
                 checkout scm
             }
         }
 
+        /*
+        =====================================
+        Build Portfolio Application
+        =====================================
+        */
+
         stage('Build Portfolio App') {
+
             when {
                 branch 'main'
             }
+
             steps {
+
                 dir('portfolio') {
+
                     echo "Building Portfolio Application"
+
                     sh 'ls -la'
                 }
             }
         }
 
+        /*
+        =====================================
+        SonarQube Analysis
+        =====================================
+        */
+
         stage('SonarQube Analysis') {
+
             when {
                 branch 'main'
             }
+
             steps {
 
                 dir('portfolio') {
@@ -63,10 +93,18 @@ pipeline {
             }
         }
 
+        /*
+        =====================================
+        Build Docker Image
+        =====================================
+        */
+
         stage('Docker Build') {
+
             when {
                 branch 'main'
             }
+
             steps {
 
                 dir('portfolio') {
@@ -74,16 +112,24 @@ pipeline {
                     echo "Building Docker Image"
 
                     sh """
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker build -t ${DOCKER_USERNAME}/portfolio:${IMAGE_TAG} .
                     """
                 }
             }
         }
 
+        /*
+        =====================================
+        Trivy Image Scan
+        =====================================
+        */
+
         stage('Trivy Image Scan') {
+
             when {
                 branch 'main'
             }
+
             steps {
 
                 echo "Running Trivy Security Scan"
@@ -94,10 +140,18 @@ pipeline {
             }
         }
 
+        /*
+        =====================================
+        Generate SBOM
+        =====================================
+        */
+
         stage('Generate SBOM') {
+
             when {
                 branch 'main'
             }
+
             steps {
 
                 echo "Generating SBOM"
@@ -112,10 +166,18 @@ pipeline {
             }
         }
 
+        /*
+        =====================================
+        Push Docker Image
+        =====================================
+        */
+
         stage('Push Docker Image') {
+
             when {
                 branch 'main'
             }
+
             steps {
 
                 withCredentials([
@@ -141,7 +203,11 @@ pipeline {
             }
         }
 
-    }   // <-- IMPORTANT: closes stages block
+    /*
+    =====================================
+    Post Actions
+    =====================================
+    */
 
     post {
 
@@ -155,12 +221,13 @@ pipeline {
         }
 
         success {
+
             echo 'Pipeline Executed Successfully'
         }
 
         failure {
+
             echo 'Pipeline Failed'
         }
     }
-
-}   // <-- closes pipeline
+}
