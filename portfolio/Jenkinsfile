@@ -6,7 +6,7 @@ pipeline {
 
         DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
 
-        IMAGE_NAME = "DOCKER_USERNAME/portfolio"
+        IMAGE_NAME = "portfolio"
 
         IMAGE_TAG = "v1"
 
@@ -51,6 +51,9 @@ pipeline {
                     echo "Building Portfolio Application"
 
                     sh 'ls -la'
+
+                    // Optional build command
+                    // sh 'npm install && npm run build'
                 }
             }
         }
@@ -82,11 +85,10 @@ pipeline {
 
                             def scannerHome = tool 'sonar-scanner'
 
+                            echo "Running SonarQube Analysis"
+
                             sh """
                             ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=portfolio \
-                            -Dsonar.projectName=portfolio \
-                            -Dsonar.sources=. \
                             -Dsonar.host.url=${SONAR_HOST_URL} \
                             -Dsonar.token=${SONAR_TOKEN}
                             """
@@ -112,11 +114,20 @@ pipeline {
 
                 dir('portfolio') {
 
-                    echo "Building Docker Image"
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                            usernameVariable: 'DOCKER_USERNAME',
+                            passwordVariable: 'DOCKER_PASSWORD'
+                        )
+                    ]) {
 
-                    sh """
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    """
+                        echo "Building Docker Image"
+
+                        sh """
+                        docker build -t \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} .
+                        """
+                    }
                 }
             }
         }
@@ -135,11 +146,20 @@ pipeline {
 
             steps {
 
-                echo "Running Trivy Security Scan"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
 
-                sh """
-                trivy image ${IMAGE_NAME}:${IMAGE_TAG}
-                """
+                    echo "Running Trivy Security Scan"
+
+                    sh """
+                    trivy image \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                }
             }
         }
 
@@ -157,15 +177,24 @@ pipeline {
 
             steps {
 
-                echo "Generating SBOM"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
 
-                sh """
-                syft ${IMAGE_NAME}:${IMAGE_TAG} -o table
-                """
+                    echo "Generating SBOM"
 
-                sh """
-                syft ${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
-                """
+                    sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o table
+                    """
+
+                    sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
+                    """
+                }
             }
         }
 
@@ -200,11 +229,13 @@ pipeline {
                     echo "Pushing Docker Image"
 
                     sh """
-                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
         }
+
+    }
 
     /*
     =====================================
