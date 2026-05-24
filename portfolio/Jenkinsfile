@@ -6,7 +6,7 @@ pipeline {
 
         DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
 
-        IMAGE_NAME = "DOCKER_USERNAME/portfolio"
+        IMAGE_NAME = "${DOCKER_USERNAME}/portfolio"
 
         IMAGE_TAG = "v1"
 
@@ -112,7 +112,7 @@ pipeline {
                     echo "Building Docker Image"
 
                     sh """
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker build -t ${DOCKER_USERNAME}/portfolio:${IMAGE_TAG} .
                     """
                 }
             }
