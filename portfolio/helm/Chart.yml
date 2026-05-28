@@ -1,0 +1,8 @@
+# Chart.yml file
+
+apiVersion: v2
+name: portfolio-app
+description: Simple portfolio deployment on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0"

@@ -1,0 +1,15 @@
+# Node / NPM
+node_modules
+dist/
+build/
+
+# Logs
+*.log
+
+# Env file
+.env
+
+# Editor
+.idea/
+.vscode/
+

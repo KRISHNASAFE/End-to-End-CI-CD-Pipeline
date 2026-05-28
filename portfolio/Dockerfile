@@ -3,10 +3,20 @@
 # Base Image
 FROM nginx:alpine
 
-# Copy project anf files
-COPY index.html /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/conf.d/nginx.conf
+# Stage 1: Build
 
-# Expose port where you want to access application.
+# Use the official lightweight Nginx image
+FROM nginx:stable-alpine
+
+# Copy your local index.html to the default Nginx hosting directory
+COPY index.html /usr/share/nginx/html/index.html
+
+# Copy your custom configuration to the correct default config path
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80 for web traffic
 EXPOSE 80
+
+# Start Nginx and keep the process running in the foreground
+CMD ["nginx", "-g", "daemon off;"]
 
