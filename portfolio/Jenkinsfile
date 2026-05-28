@@ -253,7 +253,6 @@ pipeline {
         }
     }
 
-<<<<<<< HEAD
     /*
     ====================================
     Deploy image to cluster
@@ -286,7 +285,6 @@ pipeline {
     */
 
 =======
->>>>>>> 28f5f0a361cc76df18d4e7d9091904820fdaddee
     post {
         always {
             echo "Cleaning workspace..."
