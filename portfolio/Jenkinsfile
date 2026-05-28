@@ -283,8 +283,7 @@ pipeline {
     Post Actions
     =====================================
     */
-
-=======
+    
     post {
         always {
             echo "Cleaning workspace..."
