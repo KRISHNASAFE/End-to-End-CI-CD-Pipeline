@@ -4,9 +4,11 @@ pipeline {
 
     environment {
 
-        DOCKER_IMAGE = "krishnasafe/portfolio-app"
-        IMAGE_TAG = "${BUILD_NUMBER}"
-        FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
+        DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
+
+        IMAGE_NAME = "portfolio"
+
+        IMAGE_TAG = "v1"
 
         // Sonar
         SONAR_HOST_URL = credentials('sonar-host-url')
@@ -26,7 +28,7 @@ pipeline {
             when {
                 anyOf {
                     branch 'main'
-                    branch 'dev'
+                    //branch 'dev'
                 }
             }
             steps {
@@ -42,19 +44,13 @@ pipeline {
         stage('Build Portfolio App') {
             steps {
                 dir('portfolio') {
-                    sh '''
-                        echo "Checking project type..."
 
-                        if [ -f package.json ]; then
-                            echo "Node project detected"
-                            npm install
-                            npm run build || true
-                        else
-                            echo "Static site detected - skipping npm build"
-                        fi
+                    echo "Building Portfolio Application"
 
-                        ls -la
-                    '''
+                    sh 'ls -la'
+
+                    // Optional build command
+                    // sh 'npm install && npm run build'
                 }
             }
         }
@@ -78,7 +74,7 @@ pipeline {
 
                             def scannerHome = tool 'sonar-scanner'
 
-                            echo "Running SonarQube scan..."
+                            echo "Running SonarQube Analysis"
 
                             sh """
                                 ${scannerHome}/bin/sonar-scanner \
@@ -103,10 +99,21 @@ pipeline {
         stage('Docker Build') {
             steps {
                 dir('portfolio') {
-                    sh """
-                        echo "Building Docker Image: ${FULL_IMAGE}"
-                        docker build -t ${FULL_IMAGE} .
-                    """
+
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                            usernameVariable: 'DOCKER_USERNAME',
+                            passwordVariable: 'DOCKER_PASSWORD'
+                        )
+                    ]) {
+
+                        echo "Building Docker Image"
+
+                        sh """
+                        docker build -t \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} .
+                        """
+                    }
                 }
             }
         }
@@ -118,10 +125,21 @@ pipeline {
         */
         stage('Trivy Scan') {
             steps {
-                sh """
-                    echo "Running Trivy Scan"
-                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${FULL_IMAGE}
-                """
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    echo "Running Trivy Security Scan"
+
+                    sh """
+                    trivy image \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                }
             }
         }
 
@@ -143,27 +161,24 @@ pipeline {
                     )
                 ]) {
 
-                    sh """
-                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
 
-                        docker tag ${FULL_IMAGE} $DOCKER_USERNAME/portfolio-app:${IMAGE_TAG}
-                        docker push $DOCKER_USERNAME/portfolio-app:${IMAGE_TAG}
+                    echo "Generating SBOM"
+
+                    sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o table
+                    """
+
+                    sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
                     """
                 }
-            }
-        }
-
-        /*
-        =====================================
-        SBOM
-        =====================================
-        */
-        stage('Generate SBOM') {
-            steps {
-                sh """
-                    echo "Generating SBOM"
-                    syft ${FULL_IMAGE} -o spdx-json > sbom.json
-                """
             }
         }
 
@@ -187,16 +202,14 @@ pipeline {
                         echo "Checking cluster..."
                         kubectl get nodes
 
-                        echo "Deploying using Helm..."
-
-                        helm upgrade --install portfolio-app ./portfolio/helm \
-                            --namespace portfolio \
-                            --create-namespace \
-                            --set image.tag=${IMAGE_TAG}
+                    sh """
+                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
         }
+    }
+
     }
 
     /*

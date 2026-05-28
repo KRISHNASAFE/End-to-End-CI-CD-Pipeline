@@ -1,4 +1,7 @@
-# Dcokerfile
+# Dockerfile
+
+# Base Image
+FROM nginx:alpine
 
 # Stage 1: Build
 
