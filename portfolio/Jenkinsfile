@@ -6,7 +6,7 @@ pipeline {
 
         DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
 
-        IMAGE_NAME = "portfolio"
+        IMAGE_NAME = "portfolio-app"
 
         IMAGE_TAG = "v1"
 
