@@ -1,130 +1,109 @@
 pipeline {
 
-    agent any
+```
+agent any
 
-    environment {
+environment {
 
-        DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
+    DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
 
-        IMAGE_NAME = "portfolio-app"
+    IMAGE_NAME = "portfolio-app"
 
-        IMAGE_TAG = "v1"
+    IMAGE_TAG = "${BUILD_NUMBER}"
 
-        // Sonar
-        SONAR_HOST_URL = credentials('sonar-host-url')
+    SONAR_HOST_URL = credentials('sonar-host-url')
 
-        // Kubernetes kubeconfig credential ID
-        K8S_CREDS = "jenkins-kubeconfig"
+    K8S_CREDS = "jenkins-kubeconfig"
+}
+
+stages {
+
+    /*
+    =====================================
+    Checkout SCM
+    =====================================
+    */
+    stage('Checkout SCM') {
+        when {
+            anyOf {
+                branch 'dev'
+            }
+        }
+
+        steps {
+            checkout scm
+        }
     }
 
-    stages {
+    /*
+    =====================================
+    Build Portfolio App
+    =====================================
+    */
+    stage('Build Portfolio App') {
 
-        /*
-        =====================================
-        Checkout SCM
-        =====================================
-        */
-        stage('Checkout SCM') {
-            when {
-                anyOf {
-                    //branch 'main'
-                    branch 'dev'
-                }
-            }
-            steps {
-                checkout scm
+        steps {
+
+            dir('portfolio') {
+
+                echo "Building Portfolio Application"
+
+                sh 'ls -la'
             }
         }
+    }
 
-        /*
-        =====================================
-        Build (Static Safe)
-        =====================================
-        */
-        stage('Build Portfolio App') {
-            steps {
-                dir('portfolio') {
+    /*
+    =====================================
+    SonarQube Analysis
+    =====================================
+    */
+    stage('SonarQube Analysis') {
 
-                    echo "Building Portfolio Application"
-
-                    sh 'ls -la'
-
-                    // Optional build command
-                    // sh 'npm install && npm run build'
-                }
-            }
+        when {
+            branch 'dev'
         }
 
-        /*
-        =====================================
-        SonarQube (SAFE OPTIONAL)
-        =====================================
-        */
-        stage('SonarQube Analysis') {
-            when {
-                branch 'dev'
-            }
-            steps {
-                script {
-                    if (env.SONAR_HOST_URL?.trim()) {
+        steps {
 
-                        withCredentials([
-                            string(credentialsId: 'SONAR_CREDS', variable: 'SONAR_TOKEN')
-                        ]) {
+            script {
 
-                            def scannerHome = tool 'sonar-scanner'
-
-                            echo "Running SonarQube Analysis"
-
-                            sh """
-                                ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.host.url=${SONAR_HOST_URL} \
-                                -Dsonar.login=${SONAR_TOKEN} \
-                                -Dsonar.projectKey=portfolio-app
-                            """
-                        }
-
-                    } else {
-                        echo "SonarQube not configured - skipping"
-                    }
-                }
-            }
-        }
-
-        /*
-        =====================================
-        Docker Build
-        =====================================
-        */
-        stage('Docker Build') {
-            steps {
-                dir('portfolio') {
+                if (env.SONAR_HOST_URL?.trim()) {
 
                     withCredentials([
-                        usernamePassword(
-                            credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                            usernameVariable: 'DOCKER_USERNAME',
-                            passwordVariable: 'DOCKER_PASSWORD'
-                        )
+                        string(credentialsId: 'SONAR_CREDS', variable: 'SONAR_TOKEN')
                     ]) {
 
-                        echo "Building Docker Image"
+                        def scannerHome = tool 'sonar-scanner'
+
+                        echo "Running SonarQube Analysis"
 
                         sh """
-                        docker build -t \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} .
+                            ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.host.url=\$SONAR_HOST_URL \
+                            -Dsonar.token=\$SONAR_TOKEN \
+                            -Dsonar.projectKey=portfolio-app
                         """
                     }
+
+                } else {
+
+                    echo "SonarQube not configured - skipping"
                 }
             }
         }
+    }
 
-        /*
-        =====================================
-        Trivy Scan
-        =====================================
-        */
-        stage('Trivy Scan') {
-            steps {
+    /*
+    =====================================
+    Docker Build
+    =====================================
+    */
+    stage('Docker Build') {
+
+        steps {
+
+            dir('portfolio') {
 
                 withCredentials([
                     usernamePassword(
@@ -134,106 +113,10 @@ pipeline {
                     )
                 ]) {
 
-                    echo "Running Trivy Security Scan"
+                    echo "Building Docker Image"
 
                     sh """
-                    trivy image \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
-            }
-        }
-
-        /*
-        =====================================
-        Generating SBOM
-        =====================================
-        */
-        stage('Generate SBOM') {
-
-            when {
-                branch 'dev'
-            }
-
-            steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
-                    echo "Generating SBOM"
-
-                    sh """
-                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o table
-                    """
-
-                    sh """
-                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
-                    """
-                }
-            }
-        }
-
-        /*
-        =====================================
-        Docker Push
-        =====================================
-        */
-        stage('Push Docker Image') {
-
-            when {
-                branch 'dev'
-            }
-
-            steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
-                    echo "Logging into DockerHub"
-
-                    sh """
-                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                    """
-
-                    echo "Pushing Docker Image"
-
-                    sh """
-                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
-            }
-        }
-
-        /*
-        =====================================
-        Deploy to Kubernetes (Helm)
-        =====================================
-        */
-        stage('Deploy to Kubernetes') {
-            when {
-                branch 'dev'
-            }
-
-            steps {
-
-                withCredentials([
-                    file(credentialsId: 'jenkins-kubeconfig', variable: 'KUBECONFIG_FILE')
-                ]) {
-
-                    sh """
-                        export KUBECONFIG=\$KUBECONFIG_FILE
-
-                        echo "Checking cluster..."
-                        kubectl get nodes
+                        docker build -t \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} .
                     """
                 }
             }
@@ -242,22 +125,181 @@ pipeline {
 
     /*
     =====================================
-    Post Actions
+    Trivy Scan
     =====================================
     */
-    post {
-        always {
-            echo "Cleaning workspace..."
-            cleanWs()
-            sh 'docker logout || true'
-        }
+    stage('Trivy Scan') {
 
-        success {
-            echo "Pipeline SUCCESS"
-        }
+        steps {
 
-        failure {
-            echo "Pipeline FAILED"
+            withCredentials([
+                usernamePassword(
+                    credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )
+            ]) {
+
+                echo "Running Trivy Security Scan"
+
+                sh """
+                    trivy image \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
         }
     }
+
+    /*
+    =====================================
+    Generate SBOM
+    =====================================
+    */
+    stage('Generate SBOM') {
+
+        when {
+            branch 'dev'
+        }
+
+        steps {
+
+            withCredentials([
+                usernamePassword(
+                    credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )
+            ]) {
+
+                echo "Generating SBOM"
+
+                sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o table
+                """
+
+                sh """
+                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
+                """
+            }
+        }
+    }
+
+    /*
+    =====================================
+    Push Docker Image
+    =====================================
+    */
+    stage('Push Docker Image') {
+
+        when {
+            branch 'dev'
+        }
+
+        steps {
+
+            withCredentials([
+                usernamePassword(
+                    credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )
+            ]) {
+
+                echo "Logging into DockerHub"
+
+                sh """
+                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                """
+
+                echo "Pushing Docker Image"
+
+                sh """
+                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+    }
+
+    /*
+    =====================================
+    Deploy to Kubernetes using Helm
+    =====================================
+    */
+    stage('Deploy to Kubernetes') {
+
+        when {
+            branch 'dev'
+        }
+
+        steps {
+
+            withCredentials([
+                file(credentialsId: 'jenkins-kubeconfig', variable: 'KUBECONFIG_FILE')
+            ]) {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    dir('portfolio') {
+
+                        sh """
+                            export KUBECONFIG=\$KUBECONFIG_FILE
+
+                            echo "Checking cluster..."
+                            kubectl get nodes
+
+                            echo "Creating namespace if not exists..."
+                            kubectl create namespace jenkins --dry-run=client -o yaml | kubectl apply -f -
+
+                            echo "Deploying application with Helm..."
+
+                            helm upgrade --install portfolio-app ./helm \
+                            --namespace jenkins \
+                            --set image.repository=\$DOCKER_USERNAME/${IMAGE_NAME} \
+                            --set image.tag=${IMAGE_TAG}
+
+                            echo "Deployment completed"
+
+                            kubectl get pods -n jenkins
+                            kubectl get svc -n jenkins
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*
+=====================================
+Post Actions
+=====================================
+*/
+post {
+
+    always {
+
+        echo "Cleaning workspace..."
+
+        cleanWs()
+
+        sh 'docker logout || true'
+    }
+
+    success {
+
+        echo "Pipeline SUCCESS"
+    }
+
+    failure {
+
+        echo "Pipeline FAILED"
+    }
+}
+```
+
 }
