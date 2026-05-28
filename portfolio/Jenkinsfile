@@ -9,18 +9,18 @@ pipeline {
 
     parameters {
         booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run Trivy scan')
-        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image to registry')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image')
     }
 
     environment {
         APP_NAME = "portfolio-app"
         DOCKER_IMAGE = "krishnasafe/portfolio-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
+        FULL_IMAGE = "${DOCKER_IMAGE}:${BUILD_NUMBER}"
         SONAR_PROJECT = "portfolio-app"
 
-        // ✅ ADDED: Kubernetes kubeconfig path placeholder
-        KUBECONFIG_CRED = "jenkins-kubeconfig"
+        // Kubernetes kubeconfig (Jenkins Secret File ID)
+        K8S_CREDS = "jenkins-kubeconfig"
     }
 
     stages {
@@ -36,12 +36,12 @@ pipeline {
                 sh '''
                     echo "Installing dependencies..."
                     npm install
-                    npm run build || echo "No build step defined"
+                    npm run build || true
                 '''
             }
         }
 
-        stage('Unit Test (Optional)') {
+        stage('Unit Test') {
             steps {
                 sh 'npm test || true'
             }
@@ -69,7 +69,7 @@ pipeline {
             }
         }
 
-        stage('Security Scan (Trivy)') {
+        stage('Trivy Scan') {
             when {
                 expression { return params.RUN_SECURITY_SCAN }
             }
@@ -80,7 +80,7 @@ pipeline {
             }
         }
 
-        stage('Push Image') {
+        stage('Docker Push') {
             when {
                 expression { return params.PUSH_IMAGE }
             }
@@ -106,19 +106,13 @@ pipeline {
             }
         }
 
-        // ==================================================
-        // ✅ FIXED: Deploy stage INSIDE stages block
-        // + kubeconfig integration
-        // + helm fix
-        // ==================================================
-
         stage('Deploy to Kubernetes (Helm)') {
             steps {
-                withCredentials([file(credentialsId: 'jenkins-kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
+                withCredentials([file(credentialsId: env.K8S_CREDS, variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
                         export KUBECONFIG=$KUBECONFIG_FILE
 
-                        echo "Checking cluster access..."
+                        echo "Checking cluster connection..."
                         kubectl get nodes
 
                         echo "Deploying via Helm..."
@@ -127,7 +121,7 @@ pipeline {
                             --namespace portfolio \
                             --create-namespace \
                             --set image.tag=${BUILD_NUMBER}
-                    """
+                    '''
                 }
             }
         }
@@ -140,162 +134,11 @@ pipeline {
         }
 
         success {
-            echo "Pipeline SUCCESS: ${FULL_IMAGE}"
+            echo "SUCCESS: ${FULL_IMAGE}"
         }
 
         failure {
-            echo "Pipeline FAILED"
-        }
-    }
-}pipeline {
-    agent any
-
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-    }
-
-    parameters {
-        booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run Trivy scan')
-        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image to registry')
-    }
-
-    environment {
-        APP_NAME = "portfolio-app"
-        DOCKER_IMAGE = "krishnasafe/portfolio-app"
-        IMAGE_TAG = "${BUILD_NUMBER}"
-        FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
-        SONAR_PROJECT = "portfolio-app"
-    }
-
-    stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build Application') {
-            steps {
-                sh '''
-                    echo "Installing dependencies..."
-                    npm install
-                    npm run build || echo "No build step defined"
-                '''
-            }
-        }
-
-        stage('Unit Test (Optional)') {
-            steps {
-                sh 'npm test || true'
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=${SONAR_PROJECT} \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN
-                    '''
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh """
-                    docker build -t ${FULL_IMAGE} .
-                """
-            }
-        }
-
-        stage('Security Scan (Trivy)') {
-            when {
-                expression { return params.RUN_SECURITY_SCAN }
-            }
-            steps {
-                sh """
-                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${FULL_IMAGE}
-                """
-            }
-        }
-
-        stage('Push Image') {
-            when {
-                expression { return params.PUSH_IMAGE }
-            }
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push ${FULL_IMAGE}
-                    '''
-                }
-            }
-        }
-
-        stage('Generate SBOM') {
-            steps {
-                sh """
-                    syft ${FULL_IMAGE} -o json > sbom.json
-                """
-            }
-        }
-    }
-
-    /*
-    ====================================
-    Deploy image to cluster
-    ====================================
-    */
-    stage('Deploy') {
-        steps {
-           echo 'Deploying to Kubernetes using Helm...'
-
-           script {
-               // Add helm repo if needed 
-               // sh 'helm repo add portfolio https:// || true'
-               // sh 'helm repo update'
-               
-               // Deploy using helm
-               sh """
-                  helm uograde --install portfolio ./helm-chart \
-                  --namespace portfolio --create-namespace \
-                  --set image.tag=${env.BUILD_NUMBER}
-                  """
-                }
-          }
-     }
-
-
-    /*
-    =====================================
-    Post Actions
-    =====================================
-    */
-    
-    post {
-        always {
-            echo "Cleaning workspace..."
-            cleanWs()
-        }
-
-        success {
-            echo "Pipeline SUCCESS: ${FULL_IMAGE}"
-        }
-
-        failure {
-            echo "Pipeline FAILED"
+            echo "FAILED Pipeline"
         }
     }
 }
