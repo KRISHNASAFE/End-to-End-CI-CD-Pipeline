@@ -1,242 +1,110 @@
 pipeline {
-
     agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    parameters {
+        booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run Trivy scan')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image to registry')
+    }
+
     environment {
-
-        DOCKER_REGISTRY_CREDS = "DOCKER_REGISTRY_CREDS"
-
-        IMAGE_NAME = "portfolio"
-
-        IMAGE_TAG = "v1"
-
-        SONAR_HOST_URL = credentials('sonar-host-url')
+        APP_NAME = "portfolio-app"
+        DOCKER_IMAGE = "krishnasafe/portfolio-app"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
+        SONAR_PROJECT = "portfolio-app"
     }
 
     stages {
 
-        /*
-        =====================================
-        Checkout Source Code
-        =====================================
-        */
-
-        stage('Checkout SCM') {
-
-            when {
-                branch 'main'
-            }
-
+        stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        /*
-        =====================================
-        Build Portfolio Application
-        =====================================
-        */
-
-        stage('Build Portfolio App') {
-
-            when {
-                branch 'main'
-            }
-
+        stage('Build Application') {
             steps {
-
-                dir('portfolio') {
-
-                    echo "Building Portfolio Application"
-
-                    sh 'ls -la'
-
-                    // Optional build command
-                    // sh 'npm install && npm run build'
-                }
+                sh '''
+                    echo "Installing dependencies..."
+                    npm install
+                    npm run build || echo "No build step defined"
+                '''
             }
         }
 
-        /*
-        =====================================
-        SonarQube Analysis
-        =====================================
-        */
+        stage('Unit Test (Optional)') {
+            steps {
+                sh 'npm test || true'
+            }
+        }
 
         stage('SonarQube Analysis') {
-
-            when {
-                branch 'main'
-            }
-
             steps {
-
-                dir('portfolio') {
-
-                    withCredentials([
-                        string(
-                            credentialsId: 'SONAR_CREDS',
-                            variable: 'SONAR_TOKEN'
-                        )
-                    ]) {
-
-                        script {
-
-                            def scannerHome = tool 'sonar-scanner'
-
-                            echo "Running SonarQube Analysis"
-
-                            sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.host.url=${SONAR_HOST_URL} \
-                            -Dsonar.token=${SONAR_TOKEN}
-                            """
-                        }
-                    }
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        sonar-scanner \
+                        -Dsonar.projectKey=${SONAR_PROJECT} \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
                 }
             }
         }
-
-        /*
-        =====================================
-        Build Docker Image
-        =====================================
-        */
 
         stage('Docker Build') {
-
-            when {
-                branch 'main'
-            }
-
             steps {
-
-                dir('portfolio') {
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                            usernameVariable: 'DOCKER_USERNAME',
-                            passwordVariable: 'DOCKER_PASSWORD'
-                        )
-                    ]) {
-
-                        echo "Building Docker Image"
-
-                        sh """
-                        docker build -t \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} .
-                        """
-                    }
-                }
+                sh """
+                    docker build -t ${FULL_IMAGE} .
+                """
             }
         }
 
-        /*
-        =====================================
-        Trivy Image Scan
-        =====================================
-        */
-
-        stage('Trivy Image Scan') {
-
+        stage('Security Scan (Trivy)') {
             when {
-                branch 'main'
+                expression { return params.RUN_SECURITY_SCAN }
             }
-
             steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
-                    echo "Running Trivy Security Scan"
-
-                    sh """
-                    trivy image \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
+                sh """
+                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${FULL_IMAGE}
+                """
             }
         }
 
-        /*
-        =====================================
-        Generate SBOM
-        =====================================
-        */
+        stage('Push Image') {
+            when {
+                expression { return params.PUSH_IMAGE }
+            }
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push ${FULL_IMAGE}
+                    '''
+                }
+            }
+        }
 
         stage('Generate SBOM') {
-
-            when {
-                branch 'main'
-            }
-
             steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
-                    echo "Generating SBOM"
-
-                    sh """
-                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o table
-                    """
-
-                    sh """
-                    syft \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG} -o spdx-json > sbom.json
-                    """
-                }
+                sh """
+                    syft ${FULL_IMAGE} -o json > sbom.json
+                """
             }
         }
-
-        /*
-        =====================================
-        Push Docker Image
-        =====================================
-        */
-
-        stage('Push Docker Image') {
-
-            when {
-                branch 'main'
-            }
-
-            steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
-                    echo "Logging into DockerHub"
-
-                    sh """
-                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                    """
-
-                    echo "Pushing Docker Image"
-
-                    sh """
-                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
-            }
-        }
-
     }
 
+<<<<<<< HEAD
     /*
     ====================================
     Deploy image to cluster
@@ -268,25 +136,20 @@ pipeline {
     =====================================
     */
 
+=======
+>>>>>>> 28f5f0a361cc76df18d4e7d9091904820fdaddee
     post {
-
         always {
-
-            echo 'Cleaning Workspace'
-
+            echo "Cleaning workspace..."
             cleanWs()
-
-            sh 'docker logout || true'
         }
 
         success {
-
-            echo 'Pipeline Executed Successfully'
+            echo "Pipeline SUCCESS: ${FULL_IMAGE}"
         }
 
         failure {
-
-            echo 'Pipeline Failed'
+            echo "Pipeline FAILED"
         }
     }
 }
