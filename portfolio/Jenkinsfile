@@ -142,7 +142,8 @@ pipeline {
                 }
             }
         }
-                /*
+
+        /*
         =====================================
         Generating SBOM
         =====================================
@@ -175,7 +176,7 @@ pipeline {
                 }
             }
         }
-        
+
         /*
         =====================================
         Docker Push
@@ -206,13 +207,11 @@ pipeline {
                     echo "Pushing Docker Image"
 
                     sh """
-                    docker push $DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
         }
-
-    }
 
         /*
         =====================================
@@ -223,25 +222,22 @@ pipeline {
             when {
                 branch 'dev'
             }
+
             steps {
+
                 withCredentials([
                     file(credentialsId: 'jenkins-kubeconfig', variable: 'KUBECONFIG_FILE')
                 ]) {
 
                     sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
+                        export KUBECONFIG=\$KUBECONFIG_FILE
 
                         echo "Checking cluster..."
                         kubectl get nodes
-
-                    sh """
-                    docker push $DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
         }
-    }
-
     }
 
     /*
@@ -257,7 +253,7 @@ pipeline {
         }
 
         success {
-            echo "Pipeline SUCCESS: ${FULL_IMAGE}"
+            echo "Pipeline SUCCESS"
         }
 
         failure {
