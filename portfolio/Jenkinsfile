@@ -9,14 +9,14 @@ pipeline {
 
     parameters {
         booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run Trivy scan')
-        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: true, description: 'Push Docker image to registry')
     }
 
     environment {
         APP_NAME = "portfolio-app"
         DOCKER_IMAGE = "krishnasafe/portfolio-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        FULL_IMAGE = "${DOCKER_IMAGE}:${BUILD_NUMBER}"
+        FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
         SONAR_PROJECT = "portfolio-app"
 
         // Kubernetes kubeconfig (Jenkins Secret File ID)
@@ -34,16 +34,27 @@ pipeline {
         stage('Build Application') {
             steps {
                 sh '''
-                    echo "Installing dependencies..."
-                    npm install
-                    npm run build || true
+                    if [ -f package.json ]; then
+                        echo "Node project detected - running npm install & build"
+                        npm install
+                        npm run build || true
+                    else
+                        echo "Static site detected - skipping npm build"
+                        ls -la
+                    fi
                 '''
             }
         }
 
-        stage('Unit Test') {
+        stage('Unit Test (Optional)') {
             steps {
-                sh 'npm test || true'
+                sh '''
+                    if [ -f package.json ]; then
+                        npm test || true
+                    else
+                        echo "No tests for static site"
+                    fi
+                '''
             }
         }
 
@@ -51,11 +62,15 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=${SONAR_PROJECT} \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN
+                        if [ -f package.json ]; then
+                            sonar-scanner \
+                            -Dsonar.projectKey=${SONAR_PROJECT} \
+                            -Dsonar.sources=. \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.login=$SONAR_TOKEN
+                        else
+                            echo "Skipping SonarQube scan for static site"
+                        fi
                     '''
                 }
             }
@@ -69,7 +84,7 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan') {
+        stage('Security Scan (Trivy)') {
             when {
                 expression { return params.RUN_SECURITY_SCAN }
             }
@@ -80,7 +95,7 @@ pipeline {
             }
         }
 
-        stage('Docker Push') {
+        stage('Push Image') {
             when {
                 expression { return params.PUSH_IMAGE }
             }
@@ -116,7 +131,6 @@ pipeline {
                         kubectl get nodes
 
                         echo "Deploying via Helm..."
-
                         helm upgrade --install portfolio-app ./helm-chart \
                             --namespace portfolio \
                             --create-namespace \
@@ -134,11 +148,11 @@ pipeline {
         }
 
         success {
-            echo "SUCCESS: ${FULL_IMAGE}"
+            echo "Pipeline SUCCESS: ${FULL_IMAGE}"
         }
 
         failure {
-            echo "FAILED Pipeline"
+            echo "Pipeline FAILED"
         }
     }
 }
