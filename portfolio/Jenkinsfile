@@ -238,6 +238,31 @@ pipeline {
     }
 
     /*
+    ====================================
+    Deploy image to cluster
+    ====================================
+    */
+    stage('Deploy') {
+        steps {
+           echo 'Deploying to Kubernetes using Helm...'
+
+           script {
+               // Add helm repo if needed 
+               // sh 'helm repo add portfolio https:// || true'
+               // sh 'helm repo update'
+               
+               // Deploy using helm
+               sh """
+                  helm uograde --install portfolio ./helm-chart \
+                  --namespace portfolio --create-namespace \
+                  --set image.tag=${env.BUILD_NUMBER}
+                  """
+                }
+          }
+     }
+
+
+    /*
     =====================================
     Post Actions
     =====================================

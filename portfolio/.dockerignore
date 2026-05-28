@@ -1,0 +1,10 @@
+node_modules
+*.log
+.git
+.gitignore
+README.md
+Dockerfile
+.env
+*.swp
+.vscode
+.idea/
