@@ -235,7 +235,7 @@ pipeline {
                         kubectl get nodes
 
                     sh """
-                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push $DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
