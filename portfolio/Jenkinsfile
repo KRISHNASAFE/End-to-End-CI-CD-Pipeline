@@ -290,7 +290,7 @@ post {
     }
 
     success {
-
+        archiveArtifacts artifacts: 'portfolio/sbom.json', fingerprint: true
         echo "Pipeline SUCCESS"
     }
 
