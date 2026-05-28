@@ -145,21 +145,14 @@ pipeline {
 
         /*
         =====================================
-        Docker Push
+        Generating SBOM
         =====================================
         */
-        stage('Push Docker Image') {
+        stage('Generate SBOM') {
             when {
                 branch 'main'
             }
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'DOCKER_REGISTRY_CREDS',
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
 
                 withCredentials([
                     usernamePassword(
@@ -181,6 +174,45 @@ pipeline {
                 }
             }
         }
+
+        /*
+        =====================================
+        Push docker image 
+        =====================================
+        */
+
+        stage('Push Docker Image') {
+
+            when {
+                branch 'main'
+            }
+
+            steps {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${DOCKER_REGISTRY_CREDS}",
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    echo "Logging into DockerHub"
+
+                    sh """
+                    echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                    """
+
+                    echo "Pushing Docker Image"
+
+                    sh """
+                    docker push \$DOCKER_USERNAME/${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+    }
 
         /*
         =====================================
