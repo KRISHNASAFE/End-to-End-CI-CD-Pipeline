@@ -8,17 +8,21 @@ The pipeline follows modern **DevSecOps practices**, integrating code quality ch
 
 The pipeline automates:
 
-Code checkout
-Build & dependency installation
-Static code analysis
-Docker image creation
-Vulnerability scanning
-SBOM generation
-K8S deployment
+- Code checkout
+- Build & dependency installation
+- Static code analysis
+- Docker image creation
+- Vulnerability scanning
+- SBOM generation
+- K8S deployment
 
 ---
 
 # Architecture
+
+
+
+
 
 
 
@@ -92,17 +96,17 @@ K8S deployment
 
 # Clone Repository
 
-git clone https://github.com/your-username/your-repo.git
-cd your-repo
+- git clone https://github.com/your-username/your-repo.git
+- cd your-repo
 
 ---
 
 # Run Jenkins Pipeline
 
-Create Jenkins Pipeline Job
-Connect GitHub repository
-Configure credentials
-Run pipeline
+- Create Jenkins Pipeline Job
+- Connect GitHub repository
+- Configure credentials
+- Run pipeline
 
 ---
 
