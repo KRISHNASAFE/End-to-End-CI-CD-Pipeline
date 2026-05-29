@@ -96,7 +96,7 @@ The pipeline automates:
 
 # Clone Repository
 
-- git clone https://github.com/your-username/your-repo.git
+- git clone (https://github.com/KRISHNASAFE/End-to-End-CI-CD-Pipeline.git)
 - cd your-repo
 
 ---
