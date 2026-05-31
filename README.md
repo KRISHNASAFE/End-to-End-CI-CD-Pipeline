@@ -6,16 +6,21 @@ This project demonstrates a complete **End-to-End CI/CD pipeline** using Jenkins
 
 The pipeline follows modern **DevSecOps practices**, integrating code quality checks, container security scanning, and SBOM generation.
 
+The pipeline automates:
+
+- Code checkout
+- Build & dependency installation
+- Static code analysis
+- Docker image creation
+- Vulnerability scanning
+- SBOM generation
+- K8S deployment
+
 ---
 
 # Architecture
 
-
-
-
-
-
-
+<img width="4472" height="1100" alt="pipeline" src="https://github.com/user-attachments/assets/b8bfa06e-3c95-4b11-b0f6-badba595773d" />
 
 
 # Tech Stack
@@ -27,7 +32,7 @@ The pipeline follows modern **DevSecOps practices**, integrating code quality ch
 - Trivy (Security Scanning)
 - Syft / SBOM Generator
 - Linux (Jenkins Host)
-
+- Kubernetes (Deployment to Cluster)
 ---
 
 # CI/CD Pipeline Stages
@@ -56,7 +61,7 @@ The pipeline follows modern **DevSecOps practices**, integrating code quality ch
 - Docker image pushed to DockerHub / registry
 
 ### 8. Deployment
-- Application deployed using Docker container
+- Application deployed to K8S Cluster.
 
 ---
 
@@ -76,6 +81,23 @@ The pipeline follows modern **DevSecOps practices**, integrating code quality ch
 - Code quality enforcement using SonarQube
 - Containerized deployment using Docker
 - Multibranch pipeline support
+- Production-ready workflow
+- Multi-stage Jenkins pipeline
+---
+
+# Clone Repository
+
+- git clone (https://github.com/KRISHNASAFE/End-to-End-CI-CD-Pipeline.git)
+- cd your-repo
+
+---
+
+# Run Jenkins Pipeline
+
+- Create Jenkins Pipeline Job
+- Connect GitHub repository
+- Configure credentials
+- Run pipeline
 
 ---
 
