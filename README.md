@@ -100,7 +100,7 @@ The pipeline automates:
 
 ---
 
-# Screenshots (To Add)
+# Screenshots 
 
 - Jenkins pipeline success
 - SonarQube dashboard
@@ -112,7 +112,6 @@ The pipeline automates:
 
 # Future Improvements
 
-- Kubernetes deployment (EKS / Minikube)
 - Prometheus + Grafana monitoring
 - Automated rollback strategy
 - Slack/Email notifications
