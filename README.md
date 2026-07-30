@@ -86,7 +86,7 @@ The pipeline automates:
 
 # Clone Repository
 
-- git clone (https://github.com/KRISHNASAFE/End-to-End-CI-CD-Pipeline.git)
+- git clone (https://github.com/KRISHNASAFE/Production-Grade-CI-CD-Pipeline.git)
 - cd into repo folder
 
 ---
