@@ -20,17 +20,7 @@ The pipeline automates:
 
 # Architecture
 
-
-
-
-
-
-
-
-
-
-
-
+<img width="4472" height="1100" alt="pipeline" src="https://github.com/user-attachments/assets/b8bfa06e-3c95-4b11-b0f6-badba595773d" />
 
 # Tech Stack
 
@@ -97,7 +87,7 @@ The pipeline automates:
 # Clone Repository
 
 - git clone (https://github.com/KRISHNASAFE/End-to-End-CI-CD-Pipeline.git)
-- cd your-repo
+- cd into repo folder
 
 ---
 
@@ -110,7 +100,7 @@ The pipeline automates:
 
 ---
 
-# Screenshots (To Add)
+# Screenshots 
 
 - Jenkins pipeline success
 - SonarQube dashboard
@@ -122,7 +112,6 @@ The pipeline automates:
 
 # Future Improvements
 
-- Kubernetes deployment (EKS / Minikube)
 - Prometheus + Grafana monitoring
 - Automated rollback strategy
 - Slack/Email notifications
