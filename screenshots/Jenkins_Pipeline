@@ -1,0 +1,5 @@
+# Jenkins Pipeline 
+
+<img width="946" height="541" alt="image" src="https://github.com/user-attachments/assets/94d5d9b4-e4a2-42ad-b9f4-f2f9959c1162" />
+<img width="946" height="529" alt="image" src="https://github.com/user-attachments/assets/76680530-d962-43aa-8e47-c16cbf97629c" />
+
